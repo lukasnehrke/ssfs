@@ -3,20 +3,20 @@
 #include <stdlib.h>
 #include <stdatomic.h>
 #include <errno.h>
-#include "rb.h"
+#include "rbuffer.h"
 #include "sem.h"
 
-typedef struct rb_s {
+typedef struct rbuffer_s {
     atomic_int start;
     int end;
     int size;
     sem_s *sem_full;
     sem_s *sem_free;
     int buffer[];
-} rb_s;
+} rbuffer_s;
 
-rb_s *rb_create(int size) {
-    rb_s *rb = (rb_s *) malloc(sizeof(rb_s) + size * sizeof(int));
+rbuffer_s *rbuffer_create(int size) {
+    rbuffer_s *rb = (rbuffer_s *) malloc(sizeof(rbuffer_s) + size * sizeof(int));
     if (rb == NULL) return NULL;
 
     rb->sem_free = sem_create(size);
@@ -43,21 +43,21 @@ rb_s *rb_create(int size) {
     return rb;
 }
 
-void rb_destroy(rb_s *rb) {
+void rbuffer_destroy(rbuffer_s *rb) {
     if (rb == NULL) return;
     sem_destroy(rb->sem_free);
     sem_destroy(rb->sem_full);
     free(rb);
 }
 
-void rb_put(rb_s *rb, int value) {
+void rbuffer_put(rbuffer_s *rb, int value) {
     P(rb->sem_free);
     rb->buffer[rb->end++] = value;
     rb->end %= rb->size;
     V(rb->sem_full);
 }
 
-int rb_get(rb_s *rb) {
+int rbuffer_get(rbuffer_s *rb) {
     P(rb->sem_full);
 
     int start, next, value;
