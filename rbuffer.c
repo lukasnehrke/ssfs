@@ -16,6 +16,11 @@ typedef struct rbuffer_s {
 } rbuffer_s;
 
 rbuffer_s *rbuffer_create(int size) {
+    if (size <= 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     rbuffer_s *rb = (rbuffer_s *) malloc(sizeof(rbuffer_s) + size * sizeof(int));
     if (rb == NULL) return NULL;
 
