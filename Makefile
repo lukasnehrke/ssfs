@@ -9,4 +9,4 @@ all: server
 clean:
 	$(RM) server *.o
 
-server: server.o sem.o rbuffer.o
+server: server.o connection.o request.o http.o file.o sem.o rbuffer.o
