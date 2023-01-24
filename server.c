@@ -5,14 +5,21 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "connection.h"
+#include "request.h"
 
 static void die(const char *message) {
     perror(message);
     exit(EXIT_FAILURE);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
     init_connection();
+    if (init_request(argv[1])) die("init_request");
 
     struct sockaddr_in6 name = {
         .sin6_family = AF_INET6,
