@@ -44,7 +44,7 @@ void handle_request(FILE *rx, FILE *tx) {
     /* concat base path and request path */
     char *real_path = resolve_path(wwwPath, path);
     if (real_path == NULL) {
-        if (errno = EACCES) {
+        if (errno == EACCES) {
             http_forbidden(tx);
             return;
         }

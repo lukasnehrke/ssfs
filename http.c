@@ -20,7 +20,7 @@ int parse_request(FILE *rx, char **method, char **path, char **protocol) {
     /* ensure newline is present */
     size_t len = strlen(request);
     if (len == 0 || request[len - 1] != '\n') {
-        err = errno;
+        errno = err;
         return -1;
     }
 

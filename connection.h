@@ -3,7 +3,7 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-void init_connection();
+void init_connection(void);
 
 void handle_client(int client);
 

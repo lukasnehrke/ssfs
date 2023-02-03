@@ -16,7 +16,8 @@ static void die(const char *message) {
     exit(EXIT_FAILURE);
 }
 
-static void *worker_entry() {
+static void *worker(void *arg) {
+    (void) arg;
     while (1) {
         int client = rbuffer_get(rb);
 
@@ -52,20 +53,14 @@ static void *worker_entry() {
     return NULL;
 }
 
-void init_connection() {
+void init_connection(void) {
     rb = rbuffer_create(16);
     if (rb == NULL) die("rbuffer_create");
 
     pthread_t thread;
     for (int i = 0; i < 4; i++) {
-        int err = pthread_create(&thread, NULL, worker_entry, NULL);
-        if (err) {
-            errno = err;
-            die("pthread_create");
-        }
-
-        err = pthread_detach(thread);
-        if (err) perror("pthread_detach");
+        errno = pthread_create(&thread, NULL, worker, NULL);
+        if (errno) die("pthread_create");
     }
 }
 
