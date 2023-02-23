@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "connection.h"
@@ -12,18 +13,10 @@ static void die(const char *message) {
     exit(EXIT_FAILURE);
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    init_connection();
-    if (init_request(argv[1])) die("init_request");
-
+static int listen_or_die(uint16_t port) {
     struct sockaddr_in6 name = {
         .sin6_family = AF_INET6,
-        .sin6_port   = htons(8080),
+        .sin6_port   = htons(port),
         .sin6_addr   = in6addr_any,
     };
 
@@ -35,6 +28,23 @@ int main(int argc, char **argv) {
 
     if (bind(sock, (struct sockaddr *) &name, sizeof(name))) die("bind");
     if (listen(sock, SOMAXCONN)) die("listen");
+
+    return sock;
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    init_connection();
+    if (init_request(argv[1])) die("init_request");
+
+    struct sigaction sa = { .sa_handler = SIG_IGN };
+    if (sigaction(SIGPIPE, &sa, NULL)) die("sigaction");
+
+    int sock = listen_or_die(8080);
 
     while (1) {
         int client = accept(sock, NULL, NULL);
