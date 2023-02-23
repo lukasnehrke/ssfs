@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: MIT
 
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <unistd.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "connection.h"
 #include "request.h"
 
+static volatile int waiting;
+
 static void die(const char *message) {
     perror(message);
     exit(EXIT_FAILURE);
+}
+
+static void sigint_handler(int signum) {
+    (void) signum;
+    waiting = 1;
 }
 
 static int listen_or_die(uint16_t port) {
@@ -32,20 +42,10 @@ static int listen_or_die(uint16_t port) {
     return sock;
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
-    init_connection();
-    if (init_request(argv[1])) die("init_request");
-
-    struct sigaction sa = { .sa_handler = SIG_IGN };
-    if (sigaction(SIGPIPE, &sa, NULL)) die("sigaction");
+static void *worker(void *arg) {
+    (void) arg;
 
     int sock = listen_or_die(8080);
-
     while (1) {
         int client = accept(sock, NULL, NULL);
         if (client == -1) {
@@ -55,4 +55,39 @@ int main(int argc, char **argv) {
 
         handle_client(client);
     }
+
+    if (close(sock)) perror("close");
+    return NULL;
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    init_connection();
+    if (init_request(argv[1])) die("init_request");
+
+    /* register SIGINT handler */
+    struct sigaction sa = { .sa_handler = &sigint_handler, .sa_flags = SA_RESTART };
+    if (sigaction(SIGINT, &sa, NULL)) die("sigaction");
+
+    /* ignore SIGPIPE */
+    struct sigaction sa_pipe = { .sa_handler = SIG_IGN };
+    if (sigaction(SIGPIPE, &sa_pipe, NULL)) die("sigaction");
+
+    /* start worker thread */
+    pthread_t tid;
+    errno = pthread_create(&tid, NULL, worker, NULL);
+    if (errno) die("pthread_create");
+
+    /* wait for SIGINT */
+    sigset_t old_mask, new_mask;
+    if (sigemptyset(&new_mask)) die("sigemptyset");
+    if (sigaddset(&new_mask, SIGINT)) die("sigaddset");
+    if (sigprocmask(SIG_BLOCK, &new_mask, &old_mask)) die("sigprocmask");
+    while (waiting == 0) sigsuspend(&old_mask);
+
+    exit(EXIT_SUCCESS);
 }
