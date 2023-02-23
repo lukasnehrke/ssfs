@@ -43,11 +43,11 @@ static int listen_or_die(uint16_t port) {
 }
 
 static void *worker(void *arg) {
-    (void) arg;
-
-    int sock = listen_or_die(8080);
+    int sock = *((int *) arg);
     while (1) {
         int client = accept(sock, NULL, NULL);
+        if (waiting) break;
+
         if (client == -1) {
             perror("accept");
             continue;
@@ -56,7 +56,6 @@ static void *worker(void *arg) {
         handle_client(client);
     }
 
-    if (close(sock)) perror("close");
     return NULL;
 }
 
@@ -79,7 +78,8 @@ int main(int argc, char **argv) {
 
     /* start worker thread */
     pthread_t tid;
-    errno = pthread_create(&tid, NULL, worker, NULL);
+    const int sock = listen_or_die(8080);
+    errno = pthread_create(&tid, NULL, worker, (void *) &sock);
     if (errno) die("pthread_create");
 
     /* wait for SIGINT */
@@ -89,5 +89,14 @@ int main(int argc, char **argv) {
     if (sigprocmask(SIG_BLOCK, &new_mask, &old_mask)) die("sigprocmask");
     while (waiting == 0) sigsuspend(&old_mask);
 
+    /* shutdown worker thread */
+    if (shutdown(sock, SHUT_RDWR) == 0) {
+        errno = pthread_join(tid, NULL);
+        if (errno) perror("pthread_join");
+    } else {
+        perror("shutdown");
+    }
+
+    if (close(sock)) perror("close");
     exit(EXIT_SUCCESS);
 }
