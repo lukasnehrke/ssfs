@@ -10,11 +10,18 @@
 
 static char *wwwPath;
 
-int init_request(char *arg) {
-    wwwPath = realpath(arg, NULL);
-    if (wwwPath == NULL) return -1;
+static void die(const char *message) {
+    perror(message);
+    exit(EXIT_FAILURE);
+}
 
-    return 0;
+void init_request(char *path) {
+    wwwPath = realpath(path, NULL);
+    if (wwwPath == NULL) die(path);
+}
+
+void shutdown_request(void) {
+    free(wwwPath);
 }
 
 void handle_request(FILE *rx, FILE *tx) {

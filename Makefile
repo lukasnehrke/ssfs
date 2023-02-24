@@ -1,5 +1,6 @@
 CC      = gcc
-CFLAGS  = -std=c11 -pedantic -Wall -Werror -Wextra -D_XOPEN_SOURCE=700
+CFLAGS  = -g -std=c11 -pedantic -Wall -Werror -Wextra -D_XOPEN_SOURCE=700
+LDFLAGS = -g
 RM      = rm -f
 
 .PHONY: all clean

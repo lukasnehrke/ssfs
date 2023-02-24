@@ -5,6 +5,8 @@
 
 void init_connection(void);
 
+void shutdown_connection(void);
+
 void handle_client(int client);
 
 #endif

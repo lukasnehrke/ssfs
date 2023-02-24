@@ -65,8 +65,9 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    const int sock = listen_or_die(8080);
+    init_request(argv[1]);
     init_connection();
-    if (init_request(argv[1])) die("init_request");
 
     /* register SIGINT handler */
     struct sigaction sa = { .sa_handler = &sigint_handler, .sa_flags = SA_RESTART };
@@ -78,7 +79,6 @@ int main(int argc, char **argv) {
 
     /* start worker thread */
     pthread_t tid;
-    const int sock = listen_or_die(8080);
     errno = pthread_create(&tid, NULL, worker, (void *) &sock);
     if (errno) die("pthread_create");
 
@@ -96,6 +96,9 @@ int main(int argc, char **argv) {
     } else {
         perror("shutdown");
     }
+
+    shutdown_connection();
+    shutdown_request();
 
     if (close(sock)) perror("close");
     exit(EXIT_SUCCESS);
