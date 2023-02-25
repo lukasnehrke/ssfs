@@ -25,12 +25,11 @@ void shutdown_request(void) {
 }
 
 void handle_request(FILE *rx, FILE *tx) {
-    char *method, *path, *protocol;
-
-    errno = 0;
-    if (parse_request(rx, &method, &path, &protocol)) {
-        if (errno) {
-            perror("parse_request");
+    /* read status line */
+    char request[8193];
+    if (fgets(request, sizeof(request), rx) == NULL) {
+        if (ferror(rx)) {
+            perror("fgets");
             http_internal_server_error(tx);
             return;
         }
@@ -38,11 +37,37 @@ void handle_request(FILE *rx, FILE *tx) {
         return;
     }
 
+    /* ensure newline is present */
+    size_t len = strlen(request);
+    if (len == 0 || request[len - 1] != '\n') {
+        http_bad_request(tx);
+        return;
+    }
+
+    if (len > 1 && request[len - 2] == '\r') {
+        request[len - 2] = '\0';
+    } else {
+        request[len - 1] = '\0';
+    }
+
+    /* parse status line */
+    char *rest;
+    char *method   = strtok_r(request, " ", &rest);
+    char *path     = strtok_r(NULL, " ", &rest);
+    char *protocol = strtok_r(NULL, "", &rest);
+
+    if (method == NULL || path == NULL || protocol == NULL) {
+        http_bad_request(tx);
+        return;
+    }
+
+    /* only GET is allowed */
     if (strcmp(method, "GET") != 0) {
         http_bad_request(tx);
         return;
     }
 
+    /* check for valid protocol */
     if (strcmp(protocol, "HTTP/1.0") != 0 && strcmp(protocol, "HTTP/1.1") != 0) {
         http_bad_request(tx);
         return;
@@ -55,6 +80,7 @@ void handle_request(FILE *rx, FILE *tx) {
             http_forbidden(tx);
             return;
         }
+        perror("resolve_path");
         http_internal_server_error(tx);
         return;
     }
