@@ -46,6 +46,7 @@ FILE *open_file(char *path) {
 
     /* file must be regular */
     if (!S_ISREG(buf.st_mode)) {
+        fclose(file);
         errno = EACCES;
         return NULL;
     }
@@ -53,14 +54,13 @@ FILE *open_file(char *path) {
     return file;
 }
 
-int send_file(FILE *file, FILE *tx) {
-    /* for simplicity */
-    int c;
-    while ((c = getc(file)) != EOF) {
-        if (putc(c, tx) == EOF) {
+int send_file(FILE *rx, FILE *tx) {
+    char buffer[BUFSIZ];
+    while (fgets(buffer, sizeof(buffer), rx) != NULL) {
+        if (fputs(buffer, tx) == EOF) {
             return -1;
         }
     }
-    if (ferror(file)) return -1;
+    if (ferror(rx)) return -1;
     return 0;
 }
