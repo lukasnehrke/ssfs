@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include "connection.h"
+#include "request.h"
+#include "args.h"
 #include "file.h"
 #include "http.h"
 
@@ -15,9 +16,14 @@ static void die(const char *message) {
     exit(EXIT_FAILURE);
 }
 
-void init_request(char *path) {
+int init_request(void) {
+    const char *path = get_flag("path");
+    if (path == NULL) return -1;
+
     wwwPath = realpath(path, NULL);
     if (wwwPath == NULL) die(path);
+
+    return 0;
 }
 
 void shutdown_request(void) {

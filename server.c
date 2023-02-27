@@ -2,14 +2,19 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "args.h"
 #include "connection.h"
 #include "request.h"
+
+#define USAGE "%s --path=<path> [--port=<port>] [--threads=<amount>] [--bufsize=<size>]\n"
 
 static volatile int waiting;
 
@@ -23,12 +28,38 @@ static void sigint_handler(int signum) {
     waiting = 1;
 }
 
-static int listen_or_die(uint16_t port) {
-    struct sockaddr_in6 name = {
-        .sin6_family = AF_INET6,
-        .sin6_port   = htons(port),
-        .sin6_addr   = in6addr_any,
-    };
+static uint16_t parse_port(const char *flag) {
+    char *endptr;
+
+    errno = 0;
+    long x = strtol(flag, &endptr, 10);
+    if (errno != 0) die("port is an invalid number");
+
+    if (flag == endptr || *endptr != '\0') {
+        fprintf(stderr, "port is an invalid number\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (x < 0) {
+        fprintf(stderr, "port must be positive\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (x >= USHRT_MAX) {
+        fprintf(stderr, "port is too large\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return (uint16_t) x;
+}
+
+static int listen_or_die(void) {
+    uint16_t port = 8080;
+
+    const char *port_flag = get_flag("port");
+    if (port_flag != NULL) {
+        port = parse_port(port_flag);
+    }
 
     int sock = socket(AF_INET6, SOCK_STREAM, 0);
     if (sock == -1) die("socket");
@@ -36,7 +67,13 @@ static int listen_or_die(uint16_t port) {
     int flag = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag))) die("setsockopt");
 
-    if (bind(sock, (struct sockaddr *) &name, sizeof(name))) die("bind");
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port	 = htons(port);
+    addr.sin6_addr   = in6addr_any;
+
+    if (bind(sock, (struct sockaddr *) &addr, sizeof(addr))) die("bind");
     if (listen(sock, SOMAXCONN)) die("listen");
 
     return sock;
@@ -60,14 +97,15 @@ static void *worker(void *arg) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <path>\n", argv[0]);
+    if (parse_args(argc, argv)) die("parse_args");
+
+    /* init modules */
+    if (init_request() || init_connection()) {
+        fprintf(stderr, USAGE, argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    const int sock = listen_or_die(8080);
-    init_request(argv[1]);
-    init_connection();
+    const int sock = listen_or_die();
 
     /* register SIGINT handler */
     struct sigaction sa = { .sa_handler = &sigint_handler, .sa_flags = SA_RESTART };

@@ -3,7 +3,7 @@
 #ifndef REQUEST_H
 #define REQUEST_H
 
-void init_request(char *path);
+int init_request(void);
 
 void shutdown_request(void);
 

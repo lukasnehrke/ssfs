@@ -3,7 +3,7 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-void init_connection(void);
+int init_connection(void);
 
 void shutdown_connection(void);
 
