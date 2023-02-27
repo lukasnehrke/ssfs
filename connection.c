@@ -87,13 +87,10 @@ static void *worker(void *arg) {
 }
 
 int init_connection(void) {
-    /* parse args */
-    int bufsize = parse_flag("bufsize", 16);
-    threads = parse_flag("threads", 4);
-
-    rb = rbuffer_create(bufsize);
+    rb = rbuffer_create(parse_flag("bufsize", 16));
     if (rb == NULL) die("rbuffer_create");
 
+    threads = parse_flag("threads", 4);
     thread_ids = (pthread_t *) calloc(threads, sizeof(pthread_t));
     if (thread_ids == NULL) die("calloc");
 
