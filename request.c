@@ -3,32 +3,55 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "request.h"
 #include "args.h"
-#include "file.h"
 #include "http.h"
-
-static char *wwwPath;
 
 static void die(const char *message) {
     perror(message);
     exit(EXIT_FAILURE);
 }
 
+static int check_index(FILE *tx, int base) {
+    int fd = openat(base, "index.html", O_RDONLY);
+    if (fd == -1) {
+        if (errno == ENOENT || errno == EACCES) return 0;
+        perror("index.html");
+        return -1;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st)) {
+        perror("fstat");
+        close(fd);
+        return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        close(fd);
+        return 0;
+    }
+
+    http_sendfile(fd, tx);
+    return 1;
+}
+
 int init_request(void) {
     const char *path = get_flag("path");
     if (path == NULL) return -1;
 
-    wwwPath = realpath(path, NULL);
-    if (wwwPath == NULL) die(path);
+    int base = open(path, O_RDONLY | O_DIRECTORY);
+    if (base == -1) die(path);
+    if (close(base)) perror("close");
 
     return 0;
 }
 
-void shutdown_request(void) {
-    free(wwwPath);
-}
+void shutdown_request(void) {}
 
 void handle_request(FILE *rx, FILE *tx) {
     /* read status line */
@@ -67,7 +90,7 @@ void handle_request(FILE *rx, FILE *tx) {
         return;
     }
 
-    /* only GET is allowed */
+    /* check for valid method */
     if (strcmp(method, "GET") != 0) {
         http_bad_request(tx);
         return;
@@ -80,35 +103,54 @@ void handle_request(FILE *rx, FILE *tx) {
     }
 
     /* concat base path and request path */
-    char *real_path = resolve_path(wwwPath, path);
-    if (real_path == NULL) {
-        if (errno == EACCES) {
-            http_forbidden(tx);
-            return;
-        }
-        perror("resolve_path");
+    const char *base = get_flag("path");
+    char full_path[strlen(base) + strlen(path) + 2];
+    if (snprintf(full_path, sizeof(full_path), "%s/%s", base, path) < 0) {
+        perror("snprintf");
         http_internal_server_error(tx);
         return;
     }
 
-    /* open requested file */
-    FILE *file = open_file(real_path);
-    if (file == NULL) {
+    int fd = open(full_path, O_RDONLY);
+    if (fd == -1) {
+        if (errno == ENOENT) {
+            http_not_found(tx);
+            return;
+        }
         if (errno == EACCES) {
             http_forbidden(tx);
-        } else if (errno == ENOENT) {
-            http_not_found(tx);
-        } else {
-            perror(real_path);
-            http_internal_server_error(tx);
+            return;
         }
-        free(real_path);
+        perror(full_path);
+        http_internal_server_error(tx);
         return;
     }
 
-    http_ok(tx);
+    struct stat st;
+    if (fstat(fd, &st)) {
+        perror("fstat");
+        http_internal_server_error(tx);
+        close(fd);
+        return;
+    }
 
-    if (send_file(file, tx)) perror("send_file");
-    if (fclose(file)) perror("fclose");
-    free(real_path);
+    if (S_ISREG(st.st_mode)) {
+        http_sendfile(fd, tx);
+        return;
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        http_forbidden(tx);
+        if (close(fd)) perror("close");
+        return;
+    }
+
+    /* display index.html if exists */
+    if (check_index(tx, fd)) {
+        if (close(fd)) perror("close");
+        return;
+    }
+
+    http_forbidden(tx);
+    if (close(fd)) perror("close");
 }

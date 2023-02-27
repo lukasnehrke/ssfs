@@ -3,7 +3,7 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-int parse_request(FILE *rx, char **method, char **path, char **protocol);
+void http_sendfile(int from, FILE *to);
 
 void http_ok(FILE *tx);
 
