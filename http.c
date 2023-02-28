@@ -7,34 +7,7 @@
 #include <unistd.h>
 #include "http.h"
 
-void http_sendfile(int from, FILE *to) {
-    http_ok(to);
-
-    FILE *file = fdopen(from, "r");
-    if (file == NULL) {
-        perror("fdopen");
-        close(from);
-        return;
-    }
-
-    int c;
-    while ((c = getc(file)) != EOF) {
-        if (putc(c, to) == EOF) {
-            perror("putc");
-            fclose(file);
-            return;
-        }
-    }
-
-    if (ferror(file)) {
-        perror("getc");
-        fclose(file);
-        return;
-    }
-
-    if (fclose(file)) perror("fclose");
-    return;
-}
+/* dummy http responses */
 
 void http_ok(FILE *tx) {
     fprintf(tx, "HTTP/1.1 200 OK\r\n");
